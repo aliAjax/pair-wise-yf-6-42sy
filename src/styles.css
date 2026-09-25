@@ -61,7 +61,7 @@ h1 {
 
 .stat,
 .panel,
-.repair {
+.med {
   background: #ffffff;
   border: 1px solid #dde1d9;
   border-radius: 8px;
@@ -91,12 +91,19 @@ h1 {
 }
 
 .panel {
+  align-self: start;
   padding: 18px;
 }
 
 .panel h2 {
   font-size: 1rem;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
+}
+
+.hint {
+  color: #828a80;
+  font-size: 0.82rem;
+  margin: 0 0 12px;
 }
 
 .form {
@@ -122,11 +129,6 @@ textarea {
   width: 100%;
 }
 
-textarea {
-  min-height: 82px;
-  resize: vertical;
-}
-
 .primary {
   background: #526d4e;
   border-radius: 6px;
@@ -136,19 +138,33 @@ textarea {
   padding: 10px 14px;
 }
 
-.ghost {
-  background: #e9eee6;
-  border-radius: 6px;
-  color: #526d4e;
-  font-weight: 800;
-  padding: 8px 10px;
+.notice {
+  border-radius: 8px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+.notice.ok {
+  background: #d8ead6;
+  color: #376336;
+}
+
+.notice.error {
+  background: #f2d4cc;
+  color: #813d2a;
 }
 
 .toolbar {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 14px;
+}
+
+.toolbar select {
+  width: auto;
 }
 
 .seg {
@@ -164,48 +180,24 @@ textarea {
   color: white;
 }
 
-.repairs {
+.meds {
   display: grid;
   gap: 12px;
 }
 
-.repair {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: 150px 1fr;
-  min-height: 150px;
-  overflow: hidden;
-}
-
-.photo {
-  align-items: center;
-  background: #e4e8df;
-  color: #6a7268;
-  display: flex;
-  font-weight: 800;
-  justify-content: center;
-  min-height: 150px;
-}
-
-.photo img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
+.med.warn {
+  border-color: #d9a08a;
+  box-shadow: 0 0 0 1px #d9a08a;
 }
 
 .content {
   display: grid;
   gap: 10px;
-  padding: 14px 14px 14px 0;
+  padding: 14px;
 }
 
 .content h3 {
   font-size: 1.08rem;
-  margin: 0;
-}
-
-.content p {
-  color: #60695f;
   margin: 0;
 }
 
@@ -217,8 +209,7 @@ textarea {
 }
 
 .chip,
-.priority,
-.status {
+.badge {
   border-radius: 999px;
   font-size: 0.8rem;
   font-weight: 800;
@@ -230,40 +221,74 @@ textarea {
   color: #596257;
 }
 
-.priority.high {
-  background: #f2c5b2;
-  color: #813d2a;
+.badge.ok {
+  background: #d8ead6;
+  color: #376336;
 }
 
-.priority.medium {
-  background: #f4deb4;
-  color: #694c21;
-}
-
-.priority.low {
-  background: #dcebd9;
-  color: #3d6937;
-}
-
-.status.todo {
+.badge.warn {
   background: #eadbd7;
   color: #783d34;
 }
 
-.status.doing {
-  background: #dde8f2;
-  color: #315674;
+.meter {
+  background: #eef1eb;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
 }
 
-.status.done {
-  background: #d8ead6;
-  color: #376336;
+.meter span {
+  background: #526d4e;
+  display: block;
+  height: 100%;
+}
+
+.med.warn .meter span {
+  background: #b96f45;
+}
+
+.count {
+  color: #60695f;
+  margin: 0;
+}
+
+.count strong {
+  color: #202421;
+  font-size: 1.15rem;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.dose {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.dose input {
+  width: 90px;
+}
+
+.history {
+  border-top: 1px dashed #dde1d9;
+  padding-top: 8px;
+}
+
+.history summary {
+  color: #526d4e;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.history ul {
+  color: #60695f;
+  margin: 8px 0 0;
+  padding-left: 20px;
 }
 
 .empty {
@@ -290,13 +315,5 @@ textarea {
 
   .stats {
     grid-template-columns: 1fr;
-  }
-
-  .repair {
-    grid-template-columns: 1fr;
-  }
-
-  .content {
-    padding: 14px;
   }
 }

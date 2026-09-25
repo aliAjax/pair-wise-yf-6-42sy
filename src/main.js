@@ -1,87 +1,80 @@
+// 页面：渲染与交互
+
 import "./styles.css";
+import {
+  remainingOf,
+  openedDays,
+  needsReplenish,
+  registerMedicine,
+  takeDose,
+  filterMedicines,
+  distinctValues,
+  toDateStr
+} from "./logic.js";
+import { loadState, saveState } from "./store.js";
 
-const STORAGE_KEY = "zfl-14-repairs";
-const statuses = {
-  all: "全部",
-  todo: "待处理",
-  doing: "处理中",
-  done: "已完成"
-};
-
-const priorities = {
-  high: "高优先级",
-  medium: "中优先级",
-  low: "低优先级"
-};
-
-let state = loadState();
+const state = loadState();
 const app = document.querySelector("#app");
 
-function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) return JSON.parse(saved);
-  return {
-    filter: "all",
-    repairs: [
-      {
-        id: crypto.randomUUID(),
-        location: "厨房",
-        title: "水槽下方渗水",
-        priority: "high",
-        cost: 260,
-        status: "todo",
-        photo: "",
-        note: "先检查软管接口"
-      }
-    ]
-  };
-}
+let flash = null; // { type: "ok" | "error", text: string }
+const openHistory = new Set();
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+const replenishTabs = {
+  all: "全部",
+  need: "待补",
+  ok: "正常"
+};
 
 function render() {
-  const repairs = filteredRepairs();
-  const unfinished = state.repairs.filter((repair) => repair.status !== "done");
-  const totalCost = unfinished.reduce((total, repair) => total + Number(repair.cost || 0), 0);
-  const doing = state.repairs.filter((repair) => repair.status === "doing").length;
+  const now = new Date();
+  const meds = filterMedicines(state.meds, state.filters, now);
+  const needCount = state.meds.filter((med) => needsReplenish(med, now)).length;
+  const recordCount = state.meds.reduce((sum, med) => sum + med.records.length, 0);
 
   app.innerHTML = `
     <main class="shell">
       <header class="header">
         <div>
-          <p class="eyebrow">本地家庭维护台</p>
-          <h1>家庭维修事项</h1>
+          <p class="eyebrow">本地家庭药箱</p>
+          <h1>家庭药箱</h1>
         </div>
         <section class="stats">
-          <div class="stat"><span>未完成</span><strong>${unfinished.length}</strong></div>
-          <div class="stat"><span>处理中</span><strong>${doing}</strong></div>
-          <div class="stat"><span>预计费用</span><strong>¥${totalCost}</strong></div>
+          <div class="stat"><span>在箱药盒</span><strong>${state.meds.length}</strong></div>
+          <div class="stat"><span>待补药品</span><strong>${needCount}</strong></div>
+          <div class="stat"><span>服药记录</span><strong>${recordCount}</strong></div>
         </section>
       </header>
 
       <section class="layout">
         <aside class="panel">
-          <h2>新增维修事项</h2>
-          <form class="form" id="repair-form">
-            <label>位置<input name="location" required placeholder="例如卫生间"></label>
-            <label>问题描述<textarea name="title" required placeholder="例如门锁松动"></textarea></label>
-            <label>优先级<select name="priority">${renderPriorityOptions("medium")}</select></label>
-            <label>预计费用<input name="cost" type="number" min="0" step="1" value="0"></label>
-            <label>处理状态<select name="status">${renderStatusOptions("todo")}</select></label>
-            <label>照片链接<input name="photo" type="url" placeholder="可选，粘贴图片地址"></label>
-            <label>备注<textarea name="note" placeholder="师傅电话、材料或注意事项"></textarea></label>
-            <button class="primary" type="submit">保存事项</button>
+          <h2>登记药品</h2>
+          <p class="hint">同名同规格会并入原药盒，数量累加。</p>
+          <form class="form" id="med-form">
+            <label>名称<input name="name" required placeholder="例如布洛芬缓释胶囊"></label>
+            <label>规格<input name="spec" required placeholder="例如0.3g×20粒"></label>
+            <label>用途<input name="purpose" required placeholder="例如退烧止痛"></label>
+            <label>位置<input name="location" required placeholder="例如客厅抽屉"></label>
+            <label>数量<input name="total" type="number" min="1" step="1" required placeholder="本次登记数量"></label>
+            <label>开封日期<input name="openedAt" type="date" required value="${toDateStr(now)}"></label>
+            <button class="primary" type="submit">登记入库</button>
           </form>
         </aside>
 
         <section>
+          ${flash ? `<div class="notice ${flash.type}">${escapeHtml(flash.text)}</div>` : ""}
           <div class="toolbar">
-            ${Object.entries(statuses).map(([value, label]) => `<button class="seg ${state.filter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("")}
+            <select data-filter-key="location" aria-label="按位置筛选">
+              <option value="all">全部位置</option>
+              ${distinctValues(state.meds, "location").map((v) => `<option value="${escapeHtml(v)}" ${state.filters.location === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("")}
+            </select>
+            <select data-filter-key="purpose" aria-label="按用途筛选">
+              <option value="all">全部用途</option>
+              ${distinctValues(state.meds, "purpose").map((v) => `<option value="${escapeHtml(v)}" ${state.filters.purpose === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("")}
+            </select>
+            ${Object.entries(replenishTabs).map(([value, label]) => `<button class="seg ${state.filters.replenish === value ? "active" : ""}" data-replenish="${value}">${label}</button>`).join("")}
           </div>
-          <div class="repairs">
-            ${repairs.length ? repairs.map(renderRepair).join("") : `<div class="empty">当前状态下没有维修事项</div>`}
+          <div class="meds">
+            ${meds.length ? meds.map((med) => renderMed(med, now)).join("") : `<div class="empty">当前筛选下没有药品</div>`}
           </div>
         </section>
       </section>
@@ -91,90 +84,116 @@ function render() {
   bindEvents();
 }
 
-function renderRepair(repair) {
+function renderMed(med, now) {
+  const remaining = remainingOf(med);
+  const replenish = needsReplenish(med, now);
+  const percent = med.total > 0 ? Math.round((remaining / med.total) * 100) : 0;
+  const reason = remaining <= 0 ? "已用完" : "开封满三个月";
+
   return `
-    <article class="repair">
-      <div class="photo">${repair.photo ? `<img src="${escapeHtml(repair.photo)}" alt="${escapeHtml(repair.location)}维修照片">` : "未添加照片"}</div>
+    <article class="med ${replenish ? "warn" : ""}">
       <div class="content">
         <div class="row">
-          <h3>${escapeHtml(repair.location)}</h3>
-          <span class="priority ${repair.priority}">${priorities[repair.priority]}</span>
-          <span class="status ${repair.status}">${statuses[repair.status]}</span>
+          <h3>${escapeHtml(med.name)}</h3>
+          <span class="chip">${escapeHtml(med.spec)}</span>
+          <span class="badge ${replenish ? "warn" : "ok"}">${replenish ? `待补 · ${reason}` : "正常"}</span>
         </div>
-        <p>${escapeHtml(repair.title)}</p>
         <div class="row">
-          <span class="chip">预计 ¥${Number(repair.cost || 0)}</span>
-          <span class="chip">${escapeHtml(repair.note || "暂无备注")}</span>
+          <span class="chip">用途：${escapeHtml(med.purpose)}</span>
+          <span class="chip">位置：${escapeHtml(med.location)}</span>
+          <span class="chip">开封：${escapeHtml(med.openedAt)}（${openedDays(med, now)}天）</span>
         </div>
+        <div class="meter" title="余量 ${percent}%"><span style="width:${percent}%"></span></div>
+        <p class="count">余量 <strong>${remaining}</strong> / 共 ${med.total} · 已用 ${med.used}</p>
         <div class="actions">
-          <select data-status="${repair.id}">${renderStatusOptions(repair.status)}</select>
-          <button class="ghost" data-delete="${repair.id}">删除</button>
+          <form class="dose" data-dose="${med.id}">
+            <input name="count" type="number" min="1" step="1" value="1" aria-label="本次服药数量">
+            <button class="primary" type="submit">服药扣减</button>
+          </form>
         </div>
+        <details class="history" data-history="${med.id}" ${openHistory.has(med.id) ? "open" : ""}>
+          <summary>服药记录（${med.records.length}）</summary>
+          ${
+            med.records.length
+              ? `<ul>${med.records
+                  .slice()
+                  .reverse()
+                  .map((r) => `<li>${escapeHtml(String(r.at).slice(0, 10))} 服用 ${r.count}</li>`)
+                  .join("")}</ul>`
+              : `<p class="hint">暂无服药记录</p>`
+          }
+        </details>
       </div>
     </article>
   `;
 }
 
-function renderStatusOptions(selected) {
-  return Object.entries(statuses)
-    .filter(([value]) => value !== "all")
-    .map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`)
-    .join("");
-}
-
-function renderPriorityOptions(selected) {
-  return Object.entries(priorities)
-    .map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`)
-    .join("");
-}
-
 function bindEvents() {
-  document.querySelector("#repair-form").addEventListener("submit", (event) => {
+  document.querySelector("#med-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target));
-    state.repairs.unshift({
-      id: crypto.randomUUID(),
+    const total = Number(data.total);
+    if (!Number.isInteger(total) || total <= 0) {
+      flash = { type: "error", text: "数量必须是大于 0 的整数" };
+      render();
+      return;
+    }
+    const input = {
+      name: data.name.trim(),
+      spec: data.spec.trim(),
+      purpose: data.purpose.trim(),
       location: data.location.trim(),
-      title: data.title.trim(),
-      priority: data.priority,
-      cost: Number(data.cost || 0),
-      status: data.status,
-      photo: data.photo.trim(),
-      note: data.note.trim()
-    });
-    saveState();
+      total,
+      openedAt: data.openedAt
+    };
+    const { med, merged } = registerMedicine(state.meds, input);
+    flash = merged
+      ? { type: "ok", text: `「${med.name}」已并入原药盒，数量累加为 ${med.total}，服药记录保留` }
+      : { type: "ok", text: `「${med.name}」已登记入库` };
+    saveState(state);
     render();
   });
 
-  document.querySelectorAll("[data-filter]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.filter = button.dataset.filter;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-status]").forEach((select) => {
+  document.querySelectorAll("[data-filter-key]").forEach((select) => {
     select.addEventListener("change", () => {
-      const repair = state.repairs.find((item) => item.id === select.dataset.status);
-      repair.status = select.value;
-      saveState();
+      state.filters[select.dataset.filterKey] = select.value;
+      saveState(state);
       render();
     });
   });
 
-  document.querySelectorAll("[data-delete]").forEach((button) => {
+  document.querySelectorAll("[data-replenish]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.repairs = state.repairs.filter((repair) => repair.id !== button.dataset.delete);
-      saveState();
+      state.filters.replenish = button.dataset.replenish;
+      saveState(state);
       render();
     });
   });
-}
 
-function filteredRepairs() {
-  if (state.filter === "all") return state.repairs;
-  return state.repairs.filter((repair) => repair.status === state.filter);
+  document.querySelectorAll("[data-dose]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const med = state.meds.find((item) => item.id === form.dataset.dose);
+      const count = Number(new FormData(form).get("count"));
+      const result = takeDose(med, count, toDateStr(new Date()));
+      if (result.ok) {
+        flash = { type: "ok", text: `已记录服药 ${count}，「${med.name}」余量 ${remainingOf(med)}` };
+      } else if (result.reason === "insufficient") {
+        flash = { type: "error", text: `「${med.name}」余量不足（剩 ${remainingOf(med)}），本次服药未记录` };
+      } else {
+        flash = { type: "error", text: "请输入有效的服药数量" };
+      }
+      saveState(state);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-history]").forEach((details) => {
+    details.addEventListener("toggle", () => {
+      if (details.open) openHistory.add(details.dataset.history);
+      else openHistory.delete(details.dataset.history);
+    });
+  });
 }
 
 function escapeHtml(value) {
